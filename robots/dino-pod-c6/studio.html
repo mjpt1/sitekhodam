@@ -1,0 +1,166 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Dino Pod studio</title>
+<style>html,body{margin:0;background:#222}canvas{display:block}</style></head>
+<body>
+<script src="/vendor/three.min.js"></script>
+<script>
+/* Product-shot studio: loads body.stl + lid.stl (OpenSCAD mm, z up), puts a lit screen face in the window,
+   sets the robot on a wooden desk and renders stills. window.shot(name, opts) renders one and posts it to /save/<name>. */
+var T = THREE, W = 1600, H = 1600;
+var renderer = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+renderer.physicallyCorrectLights = true;
+document.body.appendChild(renderer.domElement);
+var scene = new T.Scene();
+var camera = new T.PerspectiveCamera(30, 1, 1, 2000);
+
+/* ---------- STL with crease-angle smoothing ---------- */
+function parseSTL(txt) {
+  var v = [], re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g, m;
+  while ((m = re.exec(txt))) v.push(+m[1], +m[2], +m[3]);
+  var n = v.length / 9, fn = new Float32Array(n * 3), map = {};
+  var a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), ab = new T.Vector3(), ac = new T.Vector3();
+  for (var i = 0; i < n; i++) {
+    a.fromArray(v, i * 9); b.fromArray(v, i * 9 + 3); c.fromArray(v, i * 9 + 6);
+    ab.subVectors(b, a); ac.subVectors(c, a); ab.cross(ac); var area = ab.length(); ab.normalize();
+    fn[i * 3] = ab.x; fn[i * 3 + 1] = ab.y; fn[i * 3 + 2] = ab.z;
+    for (var k = 0; k < 3; k++) {
+      var key = v[i*9+k*3].toFixed(3) + ',' + v[i*9+k*3+1].toFixed(3) + ',' + v[i*9+k*3+2].toFixed(3);
+      (map[key] = map[key] || []).push(i, area);
+    }
+  }
+  var nor = new Float32Array(v.length), cos = Math.cos(38 * Math.PI / 180);
+  for (var i = 0; i < n; i++) for (var k = 0; k < 3; k++) {
+    var key = v[i*9+k*3].toFixed(3) + ',' + v[i*9+k*3+1].toFixed(3) + ',' + v[i*9+k*3+2].toFixed(3), L = map[key];
+    var sx = 0, sy = 0, sz = 0;
+    for (var j = 0; j < L.length; j += 2) { var f = L[j], w = L[j+1];
+      if (fn[f*3]*fn[i*3] + fn[f*3+1]*fn[i*3+1] + fn[f*3+2]*fn[i*3+2] >= cos) { sx += fn[f*3]*w; sy += fn[f*3+1]*w; sz += fn[f*3+2]*w; } }
+    var l = Math.hypot(sx, sy, sz) || 1; nor[i*9+k*3] = sx/l; nor[i*9+k*3+1] = sy/l; nor[i*9+k*3+2] = sz/l;
+  }
+  var g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(v, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+  return g;
+}
+
+/* ---------- faint FDM layer lines as a bump map (world z, 0.2 mm) ---------- */
+function plaMaterial(color) {
+  var m = new T.MeshStandardMaterial({ color: color, roughness: .62, metalness: 0 });
+  m.onBeforeCompile = function (s) {
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed,1.0)).xyz;');
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n float ph = vWp.y / 0.2 * 6.2831; normal = normalize(normal + vec3(0.0, 0.05*sin(ph), 0.0) * (1.0 - abs(normal.y)));\n diffuseColor.rgb *= 0.97 + 0.03*sin(ph);');
+  };
+  return m;
+}
+
+/* ---------- the screen: 172 x 320 face drawn on a canvas ---------- */
+var face = document.createElement('canvas'); face.width = 344; face.height = 640;
+var faceTex = new T.CanvasTexture(face); faceTex.encoding = T.sRGBEncoding; faceTex.anisotropy = 8;
+function drawFace(mood) {
+  var g = face.getContext('2d'), w = face.width, h = face.height;
+  var bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#16224a'); bg.addColorStop(1, '#0a1230');
+  g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  var ey = h * .42, ex = w * .25, r = 52;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  function eye(x, open) {
+    if (!open) { g.strokeStyle = '#e8f4ff'; g.lineWidth = 14; g.beginPath(); g.arc(x, ey - 6, 36, .15 * Math.PI, .85 * Math.PI); g.stroke(); return; }
+    g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(x, ey, r, r * 1.18, 0, 0, 7); g.fill();
+    var px = mood === 'dizzy' ? 0 : 6;
+    g.fillStyle = '#10142c'; g.beginPath(); g.ellipse(x + px, ey + 8, r * .58, r * .7, 0, 0, 7); g.fill();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x + px + 14, ey - 12, 12, 0, 7); g.fill(); g.beginPath(); g.arc(x + px - 10, ey + 24, 6, 0, 7); g.fill();
+  }
+  if (mood === 'dizzy') {
+    g.strokeStyle = '#ffffff'; g.lineWidth = 10;
+    [w/2 - ex, w/2 + ex].forEach(function (x) { g.beginPath(); for (var t = 0; t < 14; t += .1) { var rr = 3 * t; g.lineTo(x + Math.cos(t) * rr, ey + Math.sin(t) * rr); } g.stroke(); });
+    g.lineWidth = 9; g.beginPath(); for (var x = w*.32; x <= w*.68; x += 4) g.lineTo(x, h*.66 + Math.sin(x / 9) * 9); g.stroke();
+    g.fillStyle = '#ffd25a'; g.font = 'bold 54px sans-serif'; g.fillText('✦', w*.12, h*.2); g.fillText('✦', w*.72, h*.16);
+  } else {
+    eye(w/2 - ex, mood !== 'sleep'); eye(w/2 + ex, mood !== 'sleep');
+    if (mood === 'angry') { g.strokeStyle = '#ff5d73'; g.lineWidth = 16;
+      g.beginPath(); g.moveTo(w/2 - ex - 50, ey - 92); g.lineTo(w/2 - ex + 44, ey - 66); g.stroke();
+      g.beginPath(); g.moveTo(w/2 + ex + 50, ey - 92); g.lineTo(w/2 + ex - 44, ey - 66); g.stroke(); }
+    g.fillStyle = 'rgba(255,110,140,.45)'; g.beginPath(); g.ellipse(w*.16, h*.58, 30, 16, 0, 0, 7); g.ellipse(w*.84, h*.58, 30, 16, 0, 0, 7); g.fill();
+    g.strokeStyle = '#ffffff'; g.lineWidth = 10; g.beginPath();
+    if (mood === 'angry') g.arc(w/2, h*.7, 34, 1.15 * Math.PI, 1.85 * Math.PI);
+    else if (mood === 'sleep') { g.arc(w/2, h*.64, 14, 0, 7); }
+    else g.arc(w/2, h*.6, 38, .2 * Math.PI, .8 * Math.PI);
+    g.stroke();
+    if (mood === 'sleep') { g.fillStyle = '#9fb4ff'; g.font = 'bold 60px sans-serif'; g.fillText('z', w*.66, h*.22); g.font = 'bold 40px sans-serif'; g.fillText('z', w*.8, h*.13); }
+  }
+  // status bar like a tiny OS
+  g.fillStyle = 'rgba(255,255,255,.55)'; g.font = '600 26px sans-serif'; g.fillText('10:24', 18, 40);
+  g.fillRect(w - 66, 20, 44, 22); g.fillStyle = '#4ad6c0'; g.fillRect(w - 63, 23, 30, 16);
+  faceTex.needsUpdate = true;
+}
+
+/* ---------- wood desk ---------- */
+function woodTexture() {
+  var c = document.createElement('canvas'); c.width = 2048; c.height = 1024; var g = c.getContext('2d');
+  g.fillStyle = '#b07a4a'; g.fillRect(0, 0, c.width, c.height);
+  for (var i = 0; i < 900; i++) {
+    var y = Math.random() * c.height, a = .03 + Math.random() * .08;
+    g.strokeStyle = Math.random() < .5 ? 'rgba(90,50,20,' + a + ')' : 'rgba(255,220,170,' + a * .7 + ')';
+    g.lineWidth = .5 + Math.random() * 3; g.beginPath();
+    for (var x = 0; x <= c.width; x += 32) g.lineTo(x, y + Math.sin(x / 260 + i) * 6 + Math.sin(x / 60 + i * 3) * 1.5);
+    g.stroke();
+  }
+  var t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1.2, 1.2); t.anisotropy = 8; return t;
+}
+
+var robot = new T.Group(), bodyMat = plaMaterial(0x6fbf73);
+var desk = new T.Mesh(new T.PlaneGeometry(900, 900), new T.MeshStandardMaterial({ map: woodTexture(), roughness: .55 }));
+desk.rotation.x = -Math.PI / 2; desk.receiveShadow = true; scene.add(desk);
+var wall = new T.Mesh(new T.PlaneGeometry(2000, 1000), new T.MeshStandardMaterial({ color: 0xe9dfd2, roughness: .95 }));
+wall.position.set(0, 300, -260); wall.receiveShadow = true; scene.add(wall);
+
+// lights: big soft window light, warm desk-lamp rim, sky fill
+scene.add(new T.HemisphereLight(0xfff4e6, 0x6b4a2e, 1.1));
+var key = new T.DirectionalLight(0xfff1de, 3.2); key.position.set(-160, 260, 220); key.castShadow = true;
+key.shadow.mapSize.set(4096, 4096); key.shadow.radius = 9; key.shadow.bias = -.0004; key.shadow.normalBias = .3;
+var sc = key.shadow.camera; sc.left = -90; sc.right = 90; sc.top = 90; sc.bottom = -90; sc.near = 50; sc.far = 800; scene.add(key);
+var rim = new T.PointLight(0xffb36b, 9000, 600, 2); rim.position.set(140, 140, -120); scene.add(rim);
+var fill = new T.DirectionalLight(0xdfe8ff, .7); fill.position.set(200, 80, 160); scene.add(fill);
+
+function addProps() {
+  // a mug and a notebook, slightly out of focus by being far back
+  var mug = new T.Mesh(new T.CylinderGeometry(22, 20, 48, 48), new T.MeshStandardMaterial({ color: 0xf2efe9, roughness: .35 }));
+  mug.position.set(-110, 24, -110); mug.castShadow = mug.receiveShadow = true; scene.add(mug);
+  var coffee = new T.Mesh(new T.CircleGeometry(19, 40), new T.MeshStandardMaterial({ color: 0x3b2314, roughness: .2 }));
+  coffee.rotation.x = -Math.PI / 2; coffee.position.set(-110, 44, -110); scene.add(coffee);
+  var book = new T.Mesh(new T.BoxGeometry(130, 10, 90), new T.MeshStandardMaterial({ color: 0x2e3a66, roughness: .8 }));
+  book.position.set(120, 5, -90); book.rotation.y = .35; book.castShadow = book.receiveShadow = true; scene.add(book);
+  var leaf = new T.MeshStandardMaterial({ color: 0x3f8a4a, roughness: .7, side: T.DoubleSide });
+  var pot = new T.Mesh(new T.CylinderGeometry(26, 20, 44, 40), new T.MeshStandardMaterial({ color: 0xd9825b, roughness: .8 }));
+  pot.position.set(-190, 22, -40); pot.castShadow = true; scene.add(pot);
+  for (var i = 0; i < 9; i++) { var l = new T.Mesh(new T.SphereGeometry(1, 16, 12), leaf); l.scale.set(9, 46, 3);
+    l.position.set(-190 + Math.cos(i * .7) * 8, 70, -40 + Math.sin(i * .7) * 8); l.rotation.set(Math.sin(i) * .5, i * .7, Math.cos(i * 1.3) * .5); l.castShadow = true; scene.add(l); }
+}
+addProps();
+
+var ready = Promise.all(['body.stl', 'lid.stl'].map(function (f) { return fetch(f).then(function (r) { return r.text(); }); })).then(function (txt) {
+  txt.forEach(function (t) { var m = new T.Mesh(parseSTL(t), bodyMat); m.castShadow = m.receiveShadow = true; robot.add(m); });
+  // screen: LCD active area 17.39 x 32.35 centred at z = 24.2, just behind the window (inner front face y = -16)
+  var scr = new T.Mesh(new T.PlaneGeometry(17.39, 32.35), new T.MeshBasicMaterial({ map: faceTex, toneMapped: false }));
+  scr.position.set(0, -16.05, 24.195); scr.rotation.x = Math.PI / 2; robot.add(scr);
+  var glass = new T.Mesh(new T.PlaneGeometry(19.39, 36.28), new T.MeshStandardMaterial({ color: 0x050608, roughness: .08, metalness: .2 }));
+  glass.position.set(0, -16.02, 23.23); glass.rotation.x = Math.PI / 2; robot.add(glass);
+  robot.rotation.x = -Math.PI / 2;             // OpenSCAD z-up to three.js y-up; front (-y) now faces +z
+  robot.scale.setScalar(2.2);                  // 1 unit = 1 mm before scale; scene props are in "studio units"
+  scene.add(robot);
+});
+
+window.shot = function (name, o) {
+  o = o || {};
+  drawFace(o.mood || 'happy');
+  bodyMat.color.set(o.color || 0x6fbf73);
+  robot.rotation.z = o.turn || 0;
+  camera.fov = o.fov || 28; camera.position.set(o.cx, o.cy, o.cz); camera.lookAt(0, o.ly || 62, 0); camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+  var url = renderer.domElement.toDataURL('image/jpeg', .88);
+  return name ? fetch('/save/' + name, { method: 'POST', body: url }).then(function (r) { return r.text(); }) : 'preview';
+};
+</script>
+</body></html>

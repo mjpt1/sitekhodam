@@ -1,0 +1,53 @@
+/* Header, language menu and day/night switch: copied from the home page (index.html) so every page matches */
+  nav.site-nav { position: sticky; top: 0; z-index: 30; transition: background .3s, border-color .3s; border-bottom: 2px solid transparent; }
+  nav.solid { background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-color: var(--line); }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 68px; }
+  .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 900; color: #f7efe0; white-space: nowrap; }
+  nav.solid .logo { color: var(--ink); }
+  :root[data-theme="day"] nav .logo, :root[data-theme="day"] nav .nav-links a { color: var(--ink); }
+  :root[data-theme="day"] nav .lang-btn { color: var(--ink); border-color: var(--line); background: var(--paper); }
+  .logo-badge { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 900 .85rem Pop, sans-serif; border: 2.5px solid var(--shadow); box-shadow: 3px 3px 0 var(--shadow); }
+  .nav-right { display: flex; align-items: center; gap: 10px; }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { text-decoration: none; color: #cfc8e6; font-size: .92rem; padding: 6px 12px; border-radius: 999px; transition: background .2s, color .2s; white-space: nowrap; }
+  nav.solid .nav-links a { color: var(--muted); }
+  .nav-links a:hover { background: var(--accent); color: var(--on-accent) !important; }
+
+  /* language menu */
+  .lang { position: relative; }
+  .lang-btn { display: flex; align-items: center; gap: 6px; font: 700 .85rem var(--font); color: #f7efe0; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.18); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  nav.solid .lang-btn { color: var(--ink); border-color: var(--line); background: var(--paper); }
+  .lang-btn svg { width: 16px; height: 16px; }
+  .lang-menu { position: absolute; top: calc(100% + 8px); inset-inline-end: 0; list-style: none; margin: 0; padding: 6px; min-width: 160px; background: var(--paper); color: var(--ink); border: 2.5px solid var(--shadow); box-shadow: 5px 5px 0 var(--shadow); border-radius: 16px; }
+  .lang-menu button { width: 100%; text-align: start; font: 700 .95rem var(--font); background: none; color: inherit; border: 0; border-radius: 10px; padding: 7px 12px; cursor: pointer; }
+  .lang-menu button:hover { background: var(--bg2); }
+  .lang-menu button[aria-current="true"] { background: var(--accent); color: var(--on-accent); }
+
+  /* ---------- the hook: eclipse switch (day / night) ---------- */
+  .orb-wrap { position: fixed; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); left: 22px; z-index: 40; display: flex; align-items: center; gap: 12px; }
+  .orb { position: relative; width: 64px; height: 64px; border: 0; padding: 0; border-radius: 50%; background: none; cursor: pointer; transition: transform .4s cubic-bezier(.3,1.7,.5,1); }
+  .orb:hover { transform: scale(1.08) rotate(-8deg); }
+  .orb:active { transform: scale(.94); }
+  .orb::before { content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 1.5px dashed rgba(255,193,69,.45); animation: spin 18s linear infinite; }
+  .orb-sun { position: absolute; inset: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6c4, #ffc145 50%, #ff8a1f); box-shadow: 0 0 26px #ffb547aa, inset -4px -5px 0 rgba(200,90,0,.25); }
+  .orb-sun::before { content: ''; position: absolute; inset: -11px; border-radius: 50%; z-index: -1; background: repeating-conic-gradient(#ffc145 0 9deg, transparent 9deg 30deg); -webkit-mask: radial-gradient(circle, transparent 60%, #000 62%, #000 74%, transparent 76%); mask: radial-gradient(circle, transparent 60%, #000 62%, #000 74%, transparent 76%); animation: spin 14s linear infinite; }
+  .orb-moon { position: absolute; inset: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fffdf6, #e7e1f7 55%, #b8afd9); box-shadow: 0 0 24px #b9b0ff77, inset -5px -5px 0 rgba(90,70,160,.22); transition: transform .8s cubic-bezier(.65,0,.25,1), opacity .5s .3s; }
+  .orb-moon::before, .orb-moon::after { content: ''; position: absolute; border-radius: 50%; background: rgba(120,105,175,.28); }
+  .orb-moon::before { width: 11px; height: 11px; top: 11px; left: 12px; }
+  .orb-moon::after { width: 7px; height: 7px; bottom: 11px; right: 13px; box-shadow: -14px -2px 0 -1px rgba(120,105,175,.28); }
+  .orb-stars { position: absolute; inset: -14px; pointer-events: none; transition: opacity .5s; }
+  .orb-stars i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #fff; animation: twinkle 2.4s ease-in-out infinite; }
+  .orb-stars i:nth-child(1) { top: 4px; left: 18px; }
+  .orb-stars i:nth-child(2) { top: 20px; right: 2px; animation-delay: .8s; }
+  .orb-stars i:nth-child(3) { bottom: 6px; left: 4px; animation-delay: 1.5s; width: 3px; height: 3px; }
+  :root[data-theme="day"] .orb-moon { transform: translate(78%, -70%) scale(.85); opacity: 0; transition: transform .8s cubic-bezier(.65,0,.25,1), opacity .35s; }
+  :root[data-theme="day"] .orb-stars { opacity: 0; }
+  :root[data-theme="day"] .orb::before { border-color: rgba(29,21,48,.35); }
+  .orb-tip { background: var(--paper); color: var(--ink); border: 2.5px solid var(--shadow); box-shadow: 3px 3px 0 var(--shadow); border-radius: 14px; padding: 4px 14px; font-weight: 700; font-size: .88rem; white-space: nowrap; opacity: 0; transform: translateX(-10px) scale(.8); transition: opacity .3s, transform .45s cubic-bezier(.3,1.8,.5,1); pointer-events: none; }
+  .orb-tip.show { opacity: 1; transform: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes twinkle { 50% { opacity: .2; transform: scale(.5); } }
+  /* the theme change spreads from the switch as a growing circle */
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  @media (max-width: 960px) { .nav-links { display: none; } }
+  @media (max-width: 480px) { .logo-name { display: none; } }

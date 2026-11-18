@@ -1,0 +1,60 @@
+# --- mahsen81 static site ---
+DirectoryIndex index.html index.php
+
+# MIME types (in case the server doesn't know them)
+AddType image/webp .webp
+AddType font/woff2 .woff2
+AddType font/ttf .ttf
+AddType image/svg+xml .svg
+AddType image/x-icon .ico
+
+# Long cache for static assets (frames/fonts/images rarely change; bust via ?v=)
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType font/ttf   "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png  "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType text/css   "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+</IfModule>
+
+# Immutable caching for versioned, long-lived assets
+<IfModule mod_headers.c>
+  <FilesMatch "\.(webp|woff2|ttf)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# Compress text assets (Brotli preferred, gzip fallback)
+<IfModule mod_brotli.c>
+  AddOutputFilterByType BROTLI_COMPRESS text/html text/css application/javascript image/svg+xml application/xml text/plain
+</IfModule>
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/xml text/plain
+</IfModule>
+
+# --- added for the new version ---
+Options -Indexes
+AddDefaultCharset UTF-8
+AddType application/javascript .js
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# --- admin panel / blog ---
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(data|inc)(/|$) - [F,L]
+  RewriteRule ^blog/?$ blog.php [L,QSA]
+  RewriteRule ^blog/([^/]+)/?$ post.php?slug=$1 [L,QSA,B]
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
+  RewriteRule ^feed\.xml$ feed.php [L]
+</IfModule>
+<FilesMatch "\.(json|log)$">
+  Require all denied
+</FilesMatch>

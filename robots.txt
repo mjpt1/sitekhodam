@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /contact.php
+Disallow: /track.php
+
+Sitemap: https://mahsen81.ir/sitemap.xml
